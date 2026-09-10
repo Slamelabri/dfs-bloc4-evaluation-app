@@ -31,7 +31,24 @@ class EnsureApiTokenIsValid
             return response()->json(['message' => 'Invalid API token.'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $token->forceFill(['last_used_at' => now()])->save();
+        // Le token porte des habilitations : on verifie qu'elles couvrent
+        // reellement l'operation demandee (un token de lecture ne doit pas
+        // pouvoir creer ou modifier un ticket).
+        if ($request->isMethod('GET')) {
+            $habilitationRequise = 'tickets:read';
+        } else {
+            $habilitationRequise = 'tickets:write';
+        }
+
+        $habilitations = $token->abilities ?? [];
+
+        if (! in_array($habilitationRequise, $habilitations, true)) {
+            return response()->json([
+                'message' => 'Insufficient token abilities.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        $token->forceFill(['last_used_at' => now()])->saveQuietly();
 
         return $next($request);
     }

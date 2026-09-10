@@ -35,6 +35,10 @@ return [
         ],
     ],
 
+    'opstrack' => [
+        'api_token' => env('OPSTRACK_API_TOKEN'),
+    ],
+
     'webhook' => [
         'basic_user' => env('WEBHOOK_BASIC_USER', 'user'),
         'basic_password' => env('WEBHOOK_BASIC_PASSWORD', 'password'),
