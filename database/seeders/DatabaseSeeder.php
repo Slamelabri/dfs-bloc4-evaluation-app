@@ -109,7 +109,7 @@ class DatabaseSeeder extends Seeder
 
         ApiToken::query()->create([
             'name' => 'dispatch-dashboard',
-            'token' => env('OPSTRACK_API_TOKEN', 'change-me'),
+            'token' => config('services.opstrack.api_token'),
             'abilities' => ['tickets:read', 'tickets:write', 'weather:read'],
             'is_active' => true,
         ]);

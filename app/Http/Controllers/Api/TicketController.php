@@ -22,8 +22,15 @@ class TicketController extends Controller
         $query = Ticket::query()->with(['site', 'openedBy', 'assignedTo', 'interventions']);
 
         if ($search = $request->string('search')->toString()) {
-            $query->where('title', 'like', "%{$search}%")
-                ->orWhereRaw("reference like '%{$search}%'");
+            // Le OR est groupe dans une sous-requete : sans les parentheses,
+            // AND est prioritaire sur OR en SQL et le filtre de priorite
+            // ci-dessous ne s'applique qu'a une branche du OR.
+            // Les deux comparaisons passent par des requetes preparees :
+            // plus aucune concatenation du terme de recherche dans le SQL.
+            $query->where(function ($sousRequete) use ($search) {
+                $sousRequete->where('title', 'like', '%'.$search.'%')
+                    ->orWhere('reference', 'like', '%'.$search.'%');
+            });
         }
 
         if ($priority = $request->string('priority')->toString()) {
@@ -43,7 +50,7 @@ class TicketController extends Controller
     {
         $ticket = Ticket::query()->create([
             ...$request->validated(),
-            'reference' => 'INC-'.str_pad((string) random_int(1000, 9999), 6, '0', STR_PAD_LEFT),
+            'reference' => 'INC-'.now()->format('ymd').'-'.Str::upper(Str::random(6)),
             'status' => $request->validated('status', 'new'),
         ]);
 
@@ -54,7 +61,9 @@ class TicketController extends Controller
             'reference' => $ticket->reference,
         ]);
 
-        return new TicketResource($ticket);
+        return (new TicketResource($ticket))
+            ->response()
+            ->setStatusCode(201);
     }
 
     public function show(Ticket $ticket)
