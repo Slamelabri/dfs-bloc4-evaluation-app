@@ -33,6 +33,12 @@ $request = Request::create(
     file_get_contents('php://input') ?: null
 );
 
+// Le webhook est une interface machine-a-machine : la reponse doit toujours
+// etre du JSON. Sans cet en-tete, Laravel considere l'appel comme une requete
+// de navigateur et repond a une erreur de validation par une redirection 302
+// au lieu d'un 422 exploitable par l'appelant.
+$request->headers->set('Accept', 'application/json');
+
 $response = $kernel->handle($request);
 $response->send();
 
