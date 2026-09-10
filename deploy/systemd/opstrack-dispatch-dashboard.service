@@ -1,0 +1,27 @@
+[Unit]
+Description=OpsTrack Dispatch Dashboard (microservice Next.js)
+After=network.target apache2.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/opstrack/microservices/dispatch-dashboard
+EnvironmentFile=/var/www/opstrack/microservices/dispatch-dashboard/.env.local
+ExecStart=/usr/bin/npx next start --hostname 127.0.0.1 --port 3000
+Restart=always
+RestartSec=5
+
+# Durcissement
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/opstrack/microservices/dispatch-dashboard/.next
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

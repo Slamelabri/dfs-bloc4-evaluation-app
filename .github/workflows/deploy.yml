@@ -1,0 +1,70 @@
+name: Deploiement qualification -> production
+
+# Declenchement explicite et reproductible : le deploiement n'est jamais
+# automatique sur push. Un operateur choisit la reference a promouvoir.
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: "Reference git a promouvoir en production"
+        required: true
+        default: main
+      skip_tests:
+        description: "Sauter les tests (urgence tracee uniquement)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploiement-production
+  cancel-in-progress: false
+
+jobs:
+  controles:
+    name: Controles prealables
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: Installer PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, xml, curl, zip, bcmath, pdo_sqlite, mongodb
+          coverage: none
+
+      - name: Installer les dependances
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Suite de tests PHPUnit
+        run: php artisan test
+
+      - name: Verifier le style (Laravel Pint)
+        run: vendor/bin/pint --test
+        continue-on-error: true
+
+  deploiement:
+    name: Deploiement production
+    needs: controles
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Charger la cle SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy.pem
+          chmod 600 ~/.ssh/deploy.pem
+
+      - name: Promouvoir en production
+        env:
+          SSH_KEY: /home/runner/.ssh/deploy.pem
+          OPSTRACK_API_TOKEN: ${{ secrets.OPSTRACK_API_TOKEN }}
+          SKIP_TESTS: ${{ inputs.skip_tests && '1' || '0' }}
+        run: ./deploy/deploy.sh "${{ inputs.git_ref }}"
+
+      - name: Nettoyer la cle SSH
+        if: always()
+        run: rm -f ~/.ssh/deploy.pem
