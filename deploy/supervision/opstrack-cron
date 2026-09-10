@@ -1,0 +1,12 @@
+# Taches planifiees OpsTrack - installe dans /etc/cron.d/opstrack
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Sonde de supervision toutes les 5 minutes
+*/5 * * * * root /opt/opstrack/supervision/opstrack-healthcheck.sh
+
+# Sauvegarde quotidienne a 02h30
+30 2 * * * root /opt/opstrack/supervision/opstrack-backup.sh
+
+# Ordonnanceur Laravel
+* * * * * www-data cd /var/www/opstrack && php artisan schedule:run >> /var/log/opstrack/schedule.log 2>&1

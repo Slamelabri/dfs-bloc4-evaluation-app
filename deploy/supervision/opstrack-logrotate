@@ -1,0 +1,21 @@
+# Rotation des journaux OpsTrack - installe dans /etc/logrotate.d/opstrack
+/var/log/opstrack/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root adm
+}
+
+/var/www/opstrack/storage/logs/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    su www-data www-data
+    create 0640 www-data www-data
+}
