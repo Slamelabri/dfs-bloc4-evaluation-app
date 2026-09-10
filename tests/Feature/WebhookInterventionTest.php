@@ -17,7 +17,7 @@ class WebhookInterventionTest extends TestCase
     use CreatesDemoData;
     use RefreshDatabase;
 
-    private const URL = '/webhooks/interventions';
+    private const URL = '/api/webhooks/interventions';
 
     protected function setUp(): void
     {
