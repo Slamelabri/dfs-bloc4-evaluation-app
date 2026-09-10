@@ -25,6 +25,16 @@ PROD_HOST="${PROD_HOST:-eval-dfs-p-tpl-20265-02.it-students.fr}"
 PROD_URL="${PROD_URL:-https://eval-dfs-p-tpl-20265-02.it-students.fr}"
 APP_DIR="${APP_DIR:-/var/www/opstrack}"
 
+# Compte sous lequel les commandes applicatives sont executees sur chaque machine.
+# La qualification appartient a "ubuntu", la production a "www-data" : le compte
+# doit donc etre celui qui possede reellement l'arborescence, sinon git refuse
+# d'ecrire dans .git.
+QUALIF_RUN_AS="${QUALIF_RUN_AS:-}"
+PROD_RUN_AS="${PROD_RUN_AS:-www-data}"
+
+[ -n "$QUALIF_RUN_AS" ] && Q_AS="sudo -u $QUALIF_RUN_AS" || Q_AS=""
+[ -n "$PROD_RUN_AS" ]   && P_AS="sudo -u $PROD_RUN_AS"   || P_AS=""
+
 SSH_OPTS="-i $SSH_KEY -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
 
 titre() { echo; echo "=============================================="; echo "  $1"; echo "=============================================="; }
@@ -42,12 +52,16 @@ if [ "${SKIP_TESTS:-0}" = "1" ]; then
 else
     sur_qualif "set -e
         cd $APP_DIR
-        sudo -u www-data git fetch --all --quiet
-        sudo -u www-data git checkout --quiet '$GIT_REF'
-        sudo -u www-data git pull --quiet --ff-only origin '$GIT_REF' || true
-        composer install --no-interaction --quiet --ignore-platform-req=ext-mongodb
-        php artisan config:clear --quiet
-        php artisan test"
+        $Q_AS git fetch --all --quiet
+        # Etat git propre : les outils de build (npm, next) modifient des fichiers
+        # suivis. Les fichiers ignores (.env, vendor, node_modules) sont preserves.
+        $Q_AS git reset --hard --quiet
+        $Q_AS git clean -fdq -e node_modules -e .next -e vendor -e ".env*"
+        $Q_AS git checkout --quiet '$GIT_REF'
+        $Q_AS git pull --quiet --ff-only origin '$GIT_REF' || true
+        $Q_AS env COMPOSER_HOME=/tmp/composer composer install --no-interaction --quiet --ignore-platform-req=ext-mongodb
+        $Q_AS php artisan config:clear --quiet
+        $Q_AS php artisan test"
     echo "  Tests verts sur la qualification."
 fi
 
@@ -74,30 +88,32 @@ deployer_revision() {
 
     sur_prod "set -e
         cd $APP_DIR
-        sudo -u www-data php artisan down --render='errors::503' --retry=30 || true
+        $P_AS php artisan down --render='errors::503' --retry=30 || true
 
-        sudo -u www-data git fetch --all --quiet
-        sudo -u www-data git checkout --quiet '$ref'
-        sudo -u www-data git pull --quiet --ff-only origin '$ref' 2>/dev/null || true
+        $P_AS git fetch --all --quiet
+        $P_AS git reset --hard --quiet
+        $P_AS git clean -fdq -e node_modules -e .next -e vendor -e ".env*"
+        $P_AS git checkout --quiet '$ref'
+        $P_AS git pull --quiet --ff-only origin '$ref' 2>/dev/null || true
 
-        sudo -u www-data COMPOSER_HOME=/tmp/composer composer install --no-dev --optimize-autoloader --no-interaction --quiet --ignore-platform-req=ext-mongodb
-        sudo -u www-data php artisan migrate --force --no-interaction
+        $P_AS env COMPOSER_HOME=/tmp/composer composer install --no-dev --optimize-autoloader --no-interaction --quiet --ignore-platform-req=ext-mongodb
+        $P_AS php artisan migrate --force --no-interaction
 
         # Microservice Next.js : build seulement si ses sources ont bouge
         cd $APP_DIR/microservices/dispatch-dashboard
-        sudo -u www-data npm ci --silent --no-audit --no-fund
-        sudo -u www-data npm run build --silent
+        $P_AS env HOME=/var/cache/opstrack-npm npm_config_cache=/var/cache/opstrack-npm npm ci --silent --no-audit --no-fund
+        $P_AS env HOME=/var/cache/opstrack-npm npm_config_cache=/var/cache/opstrack-npm npm run build --silent
         cd $APP_DIR
 
-        sudo -u www-data php artisan config:cache --quiet
-        sudo -u www-data php artisan route:cache --quiet
-        sudo -u www-data php artisan view:cache  --quiet
+        $P_AS php artisan config:cache --quiet
+        $P_AS php artisan route:cache --quiet
+        $P_AS php artisan view:cache  --quiet
 
         sudo chmod -R 775 storage bootstrap/cache
         sudo systemctl restart opstrack-dispatch-dashboard
         sudo systemctl reload apache2
 
-        sudo -u www-data php artisan up"
+        $P_AS php artisan up"
 }
 
 deployer_revision "$GIT_REF"
